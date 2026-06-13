@@ -1,0 +1,115 @@
+import asyncio
+import logging
+from datetime import datetime, timedelta, timezone
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - [%(levelname)s] - %(message)s'
+)
+
+
+# Создание mock-заглушки
+class MockBotModule:
+    """
+    Класс имитации, замещающий чат-бот.
+    Принимает данные и выводит их в консоль.
+    """
+# Имитация отправки напоминания
+    async def send_calendar_reminder(self, chat_id: int, text: str) -> bool:
+        logging.info(f"Вызван метод send_calendar_reminder")
+        logging.info(f"Адресат: ID = {chat_id}")
+        logging.info(f"Текст напоминания: \"{text}\"")
+        logging.info(f"Статус: Напоминание успешно доставлено\n")
+        return True
+
+
+# Создание объекта-имитации бота
+bot_module = MockBotModule()
+# Множество для хранения дубликатов
+PROCESSED_IDS = set()
+
+
+# Имитация ответа от Google
+def get_mock_calendar_events():
+    """
+    Имитирует ответ от Google Calendar API.
+    """
+    now = datetime.now(timezone.utc)
+    # Вычисление времени начала события, которое начнется через 10 минут
+    target_time = (now + timedelta(minutes=10)).isoformat(timespec='seconds').replace('+00:00', 'Z')
+
+    return [
+        {
+            "id": "event_1",
+            "summary": "Привезти справку в автошколу",
+            "description": "tg_user_id: 123456789",
+            "start": {"dateTime": target_time}
+        },
+        {
+            "id": "event_1",  # Дубликат для проверки работы фильтра
+            "summary": "Привезти справку в автошколу. (Дубликат)",
+            "description": "tg_user_id: 123456789",
+            "start": {"dateTime": target_time}
+        },
+        {
+            "id": "event_2",  # Событие без id пользователя
+            "summary": "Обед",
+            "description": "Текст",
+            "start": {"dateTime": target_time}
+        }
+    ]
+
+
+# Имитация работы polling
+async def poll_calendar_service_test():
+    logging.info("Запуск тестового мониторинга")
+
+    for iteration in range(1, 3):
+        logging.info(f"Начало цикла мониторинга № {iteration}")
+
+        # Расчет временного интервала
+        now = datetime.now(timezone.utc)
+        time_min = now.isoformat(timespec='seconds').replace('+00:00', 'Z')
+        time_max = (now + timedelta(minutes=15)).isoformat(timespec='seconds').replace('+00:00', 'Z')
+
+        logging.info(f"Текущий временной интервал поиска: {time_min} -> {time_max}")
+        logging.info("Имитация запроса к Google Calendar API")
+
+        events = get_mock_calendar_events()
+        logging.info(f"Найдено событий: {len(events)}")
+
+        for event in events:
+            event_id = event["id"]
+            summary = event["summary"]
+            description = event.get("description", "")
+
+            logging.info(f"Проверка события: ID: {event_id}, название: \"{summary}\"")
+
+            # Фильтрация дубликатов
+            if event_id in PROCESSED_IDS:
+                logging.info(f"Событие {event_id} пропущено: ID найден в PROCESSED_IDS")
+                continue
+
+            # Проверка наличия ID пользователя
+            if "tg_user_id:" in description:
+                try:
+                    chat_id = int(description.split("tg_user_id:")[1].strip())
+
+                    text_notification = f"Напоминание! Событие \"{summary}\" начнется через 15 минут."
+                    await bot_module.send_calendar_reminder(chat_id, text_notification)
+
+                    # Фиксация события в множестве
+                    PROCESSED_IDS.add(event_id)
+                    logging.info(f"ID {event_id} добавлен в PROCESSED_IDS")
+                except (IndexError, ValueError) as ex:
+                    logging.error(f"Ошибка парсинга строки: {ex}")
+            else:
+                logging.info(f"Пропуск объекта {event_id}: отсутствует ID пользователя")
+
+        logging.info(f"Завершение цикла мониторинга № {iteration}")
+        await asyncio.sleep(1)
+
+
+if __name__ == "__main__":
+    asyncio.run(poll_calendar_service_test())
