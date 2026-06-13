@@ -15,11 +15,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 SCOPES = ['https://www.googleapis.com/auth/calendar'] # Список разрешений, который будет запрошен у пользователя
 POLLING_LOOKAHEAD_MINUTES = 15  # Интервал поиска событий
 POLLING_SLEEP_SECONDS = 60  # Пауза между циклами опроса
-
-# Множество для фильтрации дубликатов
-PROCESSED_IDS = set()
-# Переменная для хранения даты последней очистки множества
-_LAST_CLEANUP_DATE = None
+PROCESSED_IDS = set() # Множество для фильтрации дубликатов
+_LAST_CLEANUP_DATE = None # Переменная для хранения даты последней очистки множества
 
 
 def _cleanup_processed_ids():
@@ -42,14 +39,14 @@ def get_calendar_service():
     creds = None
 
     if os.path.exists('token.json'):
-        credentials = Credentials.from_authorized_user_file('token.json', SCOPES)
+        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
-            creds = flow.run_local_server(port=8080)
+            creds = flow.run_local_server(port=0)
 
         with open('token.json', 'w') as token:
             token.write(creds.to_json())
@@ -119,6 +116,7 @@ async def poll_calendar_service(service, bot_module):
     """
     Бесконечный фоновый опрос календаря.
     """
+    logging.info("Фоновый мониторинг запущен")
     while True:
         try:
             # Очистка мноджества
@@ -170,3 +168,12 @@ async def poll_calendar_service(service, bot_module):
         except Exception as error:
             logging.error(f"Ошибка в polling: {error}")
             await asyncio.sleep(5)
+
+
+if __name__ == "__main__":
+    logging.info("Запуск модуля интеграции")
+
+    service = get_calendar_service()
+
+    logging.info("Авторизация успешно завершена")
+    logging.info("Модуль готов к работе")
